@@ -1,11 +1,7 @@
-# Ensemble (AIFS-CRPS / AIFS-ENS style) model on the O48 toy dataset (hands-on session 2).
-# The course version of the pretraining stage of the O48 AIFS-CRPS model used in the inference session
-# (anemoi-configs: training-course-crps-o48-6h-pretrain.yaml), with fewer steps and a single GPU.
+# Ensemble (AIFS-CRPS / AIFS-ENS style) model on the O48 toy dataset.
 #
 #   anemoi-training train --config-path=$PWD/configs --config-name=crps_o48
 #
-# Compared with deterministic_o48.yaml, only three lines of the defaults list change
-# (model, training and diagnostics), plus the ensemble size and the loss below.
 defaults:
 - data: toy
 - dataloader: toy_o48
@@ -46,7 +42,7 @@ training:
   # Members per GPU. Ensemble size = ensemble_size_per_device * num_gpus_per_ensemble.
   ensemble_size_per_device: 2
 
-  # One GPU, so this is also the effective learning rate. The O48 pretraining used 1.25e-4 per GPU
+  # One GPU, so this is also the effective learning rate.
   # on 4 GPUs: the same effective rate, but with a 4x larger effective batch (8 instead of 2).
   lr:
     rate: 5.0e-4
@@ -80,7 +76,6 @@ training:
     datasets:
       data:
         # The CRPS is evaluated on 3 smoothed versions of the fields plus the full-resolution field.
-        # The smoothing matrices are pre-computed (Gaussian, sigma = 4x/2x/1x the grid spacing).
         _target_: anemoi.training.losses.MultiscaleLossWrapper
         loss_matrices_path: ${system.input.loss_matrices_path}
         loss_matrices:

@@ -1,5 +1,4 @@
-# Deterministic AIFS-style model on the O48 toy dataset (hands-on session 1).
-# Same data, graph and model size as crps_o48.yaml, so the two trainings can be compared.
+# Deterministic AIFS-style model on the O48 toy dataset.
 #
 #   anemoi-training train --config-path=$PWD/configs --config-name=deterministic_o48
 #
@@ -45,7 +44,7 @@ training:
   max_epochs: null
   num_sanity_val_steps: 1
 
-  # One GPU, so this is also the effective learning rate. The O48 pretraining used 1.25e-4 per GPU
+  # One GPU, so this is also the effective learning rate.
   # on 4 GPUs: the same effective rate, but with a 4x larger effective batch (8 instead of 2).
   lr:
     rate: 5.0e-4
