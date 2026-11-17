@@ -1,0 +1,23 @@
+nodes:
+  coarse:
+    node_builder:
+      _target_: anemoi.graphs.nodes.NPZFileNodes
+      npz_file: graphs/grid_o12.npz
+  fine:
+    node_builder:
+      _target_: anemoi.graphs.nodes.AnemoiDatasetNodes
+      dataset: /home/mlx/ai-ml/datasets/aifs-ea-an-oper-0001-mars-o48-2010-2022-6h-v1-toy.zarr
+
+edges:
+  - source_name: coarse
+    target_name: fine
+    edge_builders:
+      # Option 1: the 4 nearest coarse nodes
+      - _target_: anemoi.graphs.edges.KNNEdges
+        num_nearest_neighbours: 4
+    attributes:
+      edge_length:
+        _target_: anemoi.graphs.edges.attributes.EdgeLength
+        norm: unit-max
+      edge_dirs:
+        _target_: anemoi.graphs.edges.attributes.EdgeDirection
