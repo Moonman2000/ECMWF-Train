@@ -1,0 +1,51 @@
+# Experiment 1: fine-tune the model of session 5 with a NEW DECODER that predicts the observations.
+#
+#   data (O48 ERA5, t-6h, t) --encoder.data--\
+#                                             (+)--> hidden --processor--> hidden --decoder.data--> data (t+6h)
+#   obs forcings (t-6h, t)   --encoder.obs---/                                   \--decoder.obs---> obs  (observations, t+6h)
+#
+# The observed variables are only a target (diagnostic). In this version of anemoi every dataset is also
+# encoded, so the obs encoder reads what `obs` has as input: its forcings (position, time of day, insolation,
+# land-sea mask, orography). Its latent state is added to the one of ERA5 on the hidden mesh.
+#
+# Everything of ERA5 and the processor are loaded from the session-5 checkpoint and frozen; the obs encoder and
+# decoder start from random weights and learn.
+#
+#   anemoi-training train --config-path=$PWD/configs --config-name=finetune_obs_decoder \
+#       system.input.warm_start=<session-5 checkpoint last.ckpt>
+defaults:
+- deterministic_o48 # everything of the model of session 5 ...
+- obs: radiosondes  # ... plus the observation dataset `obs`
+- _self_
+
+# The config schema of anemoi-training only accepts its own processor classes, and we use our own
+# imputer (obs_imputer.ObsImputer). So we switch the schema validation off for this config.
+config_validation: False
+
+system:
+  input:
+    graph: ${system.output.root}/graphs/finetune_obs_decoder.pt
+    warm_start: ??? # the checkpoint of session 5, e.g. <output root>/checkpoint/<run id>/last.ckpt
+
+training:
+  # Start from the weights of system.input.warm_start. transfer_learning: load the weights that exist in
+  # the checkpoint with the same shape (all of ERA5 and the processor); the obs encoder and decoder are new.
+  load_weights_only: True
+  transfer_learning: True
+
+  # Freeze by module name: "data" matches every module of the ERA5 dataset (encoder.data, decoder.data,
+  # their graph edges and trainable node parameters), "processor" the processor and
+  # "processor_graph_provider" its trainable edge parameters. Set to [] to fine-tune the whole model.
+  submodules_to_freeze: [data, processor, processor_graph_provider]
+
+  max_steps: 1000
+  lr:
+    rate: 1.0e-3
+    warmup: 50
+    iterations: ${training.max_steps}
+    min: 3.0e-7
+
+diagnostics:
+  log:
+    mlflow:
+      run_name: finetune-obs-decoder

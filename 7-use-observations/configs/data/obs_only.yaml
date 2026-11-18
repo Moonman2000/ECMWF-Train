@@ -1,0 +1,31 @@
+# The observation dataset as the ONLY dataset of the model (observation-only model, configs/dop_obs_only.yaml).
+# It is called `data`, like the ERA5 dataset of session 5, so all default settings of anemoi-training apply.
+# The observed variables are prognostic: input (t-6h, t) and output (t+6h).
+format: zarr
+frequency: 6h  # time frequency requested from the dataset
+timestep: 6h   # time step of the model
+
+datasets:
+  data:
+    forcing: [cos_latitude, cos_longitude, sin_latitude, sin_longitude, cos_julian_day, cos_local_time,
+              sin_julian_day, sin_local_time, insolation, lsm, z]
+    diagnostic: []
+    processors:
+      # fills the gaps of the inputs and of the target with the mean; the loss ignores the gaps of the target
+      imputer:
+        _target_: obs_imputer.ObsImputer
+        config:
+          default: "none"
+          mean: [t_850, t_500, z_500, u_500, v_500, q_700]
+      normalizer:
+        _target_: anemoi.models.preprocessing.normalizer.InputNormalizer
+        config:
+          default: "mean-std"
+          std:
+          min-max:
+          max: ["z"]
+          none: [cos_latitude, cos_longitude, sin_latitude, sin_longitude, cos_julian_day, cos_local_time,
+                 sin_julian_day, sin_local_time, insolation, lsm]
+
+# Values set in the code
+num_features: null
