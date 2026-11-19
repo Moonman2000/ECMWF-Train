@@ -4,7 +4,8 @@
 #
 #   anemoi-training train --config-path=$PWD/configs --config-name=pretrain_o48
 #
-# Files that are not in configs/ (e.g. model/graphtransformer.yaml) come from the installed anemoi-training.
+# Every file in the defaults lists is in configs/. The ones we do not change (e.g. model/graphtransformer.yaml)
+# are copies of the defaults of anemoi-training (anemoi-core main, commit 7bbffef39).
 defaults:
 - data: toy
 - dataloader: toy_o48

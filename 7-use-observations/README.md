@@ -38,9 +38,8 @@ model never had (wind, humidity). The notebook explains what changes for real (s
 | `configs/obs/era5_o96.yaml` | the dataset `obs`: variables, files, dates. Copy it for another dataset and select it with `obs=<name>`. |
 | `configs/graph/{pretrain_o48,finetune_obs_decoder,encode_obs}.yaml` | the full graph of each case (nodes, edges, attributes). `data`, `hidden` and their edges must stay the same as in the pretrained model. |
 | `configs/data/toy.yaml`, `configs/dataloader/toy_o48.yaml`, `configs/system/course.yaml` | ERA5 O48 toy dataset, periods, paths |
+| `configs/{dataloader/native_grid,diagnostics,model,system/{hardware,input,output},task,training}/...` | copies of the anemoi-training defaults the configs use (anemoi-core `main`, commit 7bbffef39), unchanged. They take precedence over the installed package, so `configs/` holds every setting of every run. |
 | `helpers.py` | config loading, training from the notebook, MLflow, running a model on one date |
-
-All other config files (e.g. `model/graphtransformer.yaml`) come from the installed anemoi-training package.
 
 ## Training in a terminal
 
