@@ -29,7 +29,7 @@ system:
 training:
   # Freeze by module name: every module called "data" (encoder.data, decoder.data, their graph edges and
   # trainable node parameters), the processor and its trainable edge parameters. [] fine-tunes the whole model.
-  submodules_to_freeze: [data, processor, processor_graph_provider]
+  submodules_to_freeze: [encoder.data, processor, decoder.data]
 
   max_steps: 1000
   lr:
