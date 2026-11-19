@@ -13,8 +13,6 @@ input:
   # Built on first use and saved here, one file per dataset: <name>_data.pt, <name>_obs.pt.
   # Each top-level config sets its own name.
   graph: ???
-  # the checkpoint to start from (see training.transfer_learning in the configs that use it)
-  warm_start: null
 
 output:
   # checkpoints, plots and MLflow logs end up here
