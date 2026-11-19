@@ -13,7 +13,7 @@
 # (configs/obs/era5_o96.yaml): the pretrained model needs ERA5 O48 as input, the obs decoder `obs` as target.
 #
 #   anemoi-training train --config-path=$PWD/configs --config-name=finetune_obs_decoder \
-#       system.input.warm_start=<pretrained last.ckpt> <obs dates, see configs/obs/era5_o96.yaml>
+#       <obs dates, see configs/obs/era5_o96.yaml>
 defaults:
 - pretrain_o48       # everything of the pretrained model ...
 - obs: era5_o96      # ... plus the dataset `obs`
@@ -23,13 +23,10 @@ defaults:
 system:
   input:
     graph: ${system.output.root}/graphs/finetune_obs_decoder.pt
-    warm_start: ??? # the training checkpoint (last.ckpt) of pretrain_o48
 
 training:
-  # Start from the weights of system.input.warm_start. transfer_learning: load the weights that exist in the
-  # checkpoint with the same shape (all of ERA5 and the processor); the obs encoder and decoder are new.
-  load_weights_only: True
-  transfer_learning: True
+  # Start from the checkpoint <system.output.root>/checkpoint/<fork_run_id>/last.ckpt of the pretrained run.
+  fork_run_id: 4438386d8b894aa59beb57bb1c7e0b85 # the pretrained run (pretrain_o48)
 
   # Freeze by module name: every module called "data" (encoder.data, decoder.data, their graph edges and
   # trainable node parameters), the processor and its trainable edge parameters. [] fine-tunes the whole model.

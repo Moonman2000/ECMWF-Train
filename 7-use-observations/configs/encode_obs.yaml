@@ -12,7 +12,7 @@
 # a smaller learning rate.
 #
 #   anemoi-training train --config-path=$PWD/configs --config-name=encode_obs \
-#       system.input.warm_start=<pretrained last.ckpt> <obs dates, see configs/obs/era5_o96.yaml>
+#       <obs dates, see configs/obs/era5_o96.yaml>
 defaults:
 - pretrain_o48
 - obs: era5_o96
@@ -27,11 +27,10 @@ data:
 system:
   input:
     graph: ${system.output.root}/graphs/encode_obs.pt
-    warm_start: ??? # the training checkpoint (last.ckpt) of pretrain_o48
 
 training:
-  load_weights_only: True
-  transfer_learning: True
+  # Start from the checkpoint <system.output.root>/checkpoint/<fork_run_id>/last.ckpt of the pretrained run.
+  fork_run_id: 4438386d8b894aa59beb57bb1c7e0b85 # the pretrained run (pretrain_o48)
 
   scalers:
     datasets:
