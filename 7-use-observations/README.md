@@ -10,8 +10,8 @@ in two ways:
 | 1. Decode to observations | `finetune_obs_decoder.yaml` | target: its variables are diagnostic, predicted by the obs decoder | pretrained model, frozen |
 | 2. Encode observations | `encode_obs.yaml` | input: its variables are prognostic, the obs loss has weight 0 | pretrained model |
 
-The pretrained model is `pretrain_o48.yaml` (run `4438386d8b894aa59beb57bb1c7e0b85`, set as `training.fork_run_id`
-in the configs that start from it).
+The pretrained model is `pretrain_o48.yaml`. The configs that start from it need its run id:
+`system.input.pretrained_run_id=<run id>` (in the notebook: `PRETRAINED_RUN_ID`).
 
 For simplicity, `obs` is **ERA5 on the O96 grid** (complete fields, no gaps), with variables the pretrained
 model never had (wind, humidity). The notebook explains what changes for real (sparse) observations.
@@ -39,6 +39,7 @@ model never had (wind, humidity). The notebook explains what changes for real (s
 | `configs/graph/{pretrain_o48,finetune_obs_decoder,encode_obs}.yaml` | the graph of each case. In anemoi-training 0.9 it is applied to each dataset (one graph per dataset, sharing the hidden nodes). |
 | `configs/data/toy.yaml`, `configs/dataloader/toy_o48.yaml`, `configs/system/course.yaml` | ERA5 O48 toy dataset, periods, paths |
 | `configs/{diagnostics,model,system/{hardware,input,output},training}/...` | copies of the anemoi-training 0.9.0 defaults the configs use, unchanged. They take precedence over the installed package, so `configs/` holds every setting of every run. |
+| `pretrained_weights.py` | callback that loads the pretrained weights that fit the new model (same name and shape); the `obs` weights stay new |
 | `helpers.py` | config loading, training from the notebook, MLflow, running a model on one date |
 
 ## Training in a terminal
@@ -53,12 +54,13 @@ DATES="dataloader.training.datasets.obs.start=<first 2020 date> dataloader.train
   dataloader.validation.datasets.obs.start=<first 2021 date> dataloader.validation.datasets.obs.end=<last 2021 date>"
 
 anemoi-training train --config-path=$PWD/configs --config-name=pretrain_o48 $D
-anemoi-training train --config-path=$PWD/configs --config-name=finetune_obs_decoder $D $DATES
-anemoi-training train --config-path=$PWD/configs --config-name=encode_obs $D $DATES
-anemoi-training train --config-path=$PWD/configs --config-name=no_obs_control $D ${DATES//.obs./.data.}
+P=system.input.pretrained_run_id=<run id of pretrain_o48>
+anemoi-training train --config-path=$PWD/configs --config-name=finetune_obs_decoder $D $DATES $P
+anemoi-training train --config-path=$PWD/configs --config-name=encode_obs $D $DATES $P
+anemoi-training train --config-path=$PWD/configs --config-name=no_obs_control $D ${DATES//.obs./.data.} $P
 ```
 
-To start from another pretrained run, add `training.fork_run_id=<run id>`.
+`PYTHONPATH` must include this folder (for `pretrained_weights.py`): `export PYTHONPATH=$PWD`.
 
 ## Things to know (anemoi-training 0.9)
 
@@ -73,6 +75,10 @@ To start from another pretrained run, add `training.fork_run_id=<run id>`.
   the obs encoder reads only the forcings of `obs`; in setup 2 the obs loss has weight 0.
 - **One graph per dataset.** The graph config is applied to each dataset, with its grid points as the `data`
   nodes, and saved as `<system.input.graph>_<dataset>.pt`.
+- **Starting from a pretrained run with a new dataset.** `training.fork_run_id` resumes the run: it loads the
+  whole checkpoint strictly and fails with `Missing key(s) in state_dict: ... obs ...`. `load_weights_only` and
+  `transfer_learning` fail too with a new dataset in 0.9.0. So the configs use the callback
+  `pretrained_weights.py` (`diagnostics.callbacks`), which loads the weights that fit and starts a fresh run.
 - **Freezing** (`training.submodules_to_freeze`) matches module *names* anywhere in the model: `data` freezes
   `encoder.data`, `decoder.data`, their graph edges and the trainable parameters of the `data` nodes.
 - **Real gridded observations** have NaN where nothing was observed: they need an imputer, and the loss needs a

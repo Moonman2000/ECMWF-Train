@@ -2,7 +2,7 @@
 # and learning rate) but WITHOUT `obs`. Comparing the two shows what the observations add.
 #
 #   anemoi-training train --config-path=$PWD/configs --config-name=no_obs_control \
-#       <dates of data, see configs/obs/era5_o96.yaml>
+#       system.input.pretrained_run_id=<run id of pretrain_o48> <dates of data, see configs/obs/era5_o96.yaml>
 defaults:
 - pretrain_o48
 - _self_
@@ -10,6 +10,8 @@ defaults:
 system:
   input:
     graph: ${system.output.root}/graphs/no_obs_control.pt
+    # run id of the pretrained run (pretrain_o48): its checkpoint <system.output.root>/checkpoint/<run id>/last.ckpt is the start
+    pretrained_run_id: ???
 
 # the same dates as `obs` in encode_obs.yaml: set them with
 #   dataloader.training.datasets.data.start=... dataloader.training.datasets.data.end=... (and validation)
@@ -36,9 +38,6 @@ dataloader:
         end: ${dataloader.validation.datasets.data.end}
 
 training:
-  # Start from the checkpoint <system.output.root>/checkpoint/<fork_run_id>/last.ckpt of the pretrained run.
-  fork_run_id: 4438386d8b894aa59beb57bb1c7e0b85 # the pretrained run (pretrain_o48)
-
   max_steps: 1000
   lr:
     rate: 1.0e-4
@@ -47,6 +46,12 @@ training:
     min: 3.0e-7
 
 diagnostics:
+  # Start from the pretrained weights: every weight of the pretrained checkpoint that exists in this model with
+  # the same name and shape is loaded; the rest is new (see pretrained_weights.py). training.fork_run_id would
+  # resume the pretrained run instead, which fails with a new dataset in anemoi-training 0.9.
+  callbacks:
+  - _target_: pretrained_weights.LoadPretrainedWeights
+    checkpoint: ${system.output.root}/${system.output.checkpoints.root}/${system.input.pretrained_run_id}/last.ckpt
   log:
     mlflow:
       run_name: no-obs-control
