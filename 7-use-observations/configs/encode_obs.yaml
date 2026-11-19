@@ -38,7 +38,7 @@ training:
           weights:
             default: 0 # `obs` only as input: no loss on it
 
-  max_steps: 1000
+  max_steps: 200
   lr:
     rate: 1.0e-4 # lower than for pretraining: the pretrained part of the model is trained too
     warmup: 50

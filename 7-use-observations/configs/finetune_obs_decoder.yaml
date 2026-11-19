@@ -31,7 +31,7 @@ training:
   # trainable node parameters), the processor and its trainable edge parameters. [] fine-tunes the whole model.
   submodules_to_freeze: [encoder.data, processor, decoder.data]
 
-  max_steps: 1000
+  max_steps: 200
   lr:
     rate: 1.0e-3
     warmup: 50
