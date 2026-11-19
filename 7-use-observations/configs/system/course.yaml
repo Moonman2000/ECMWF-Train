@@ -1,0 +1,26 @@
+# Paths and hardware of the training-course server (one GPU), as in session 5.
+defaults:
+  - output: example
+  - input: example
+  - hardware: example
+
+input:
+  # the toy dataset of session 5: O48 grid, 6-hourly, 2010-2022, 23 variables
+  dataset: /datasets/aifs-ea-an-oper-0001-mars-o48-2010-2022-6h-v1-toy.zarr
+  # the gridded observation dataset (see the notebook for what it has to look like)
+  obs_dataset: /datasets/aifsdop-ea-ofb-oper-0001-mars-o96-2010-2024-6h-v1-observations-radiosondes.zarr
+  # Built on first use and saved here, one file per dataset: <name>_data.pt, <name>_obs.pt.
+  # Each top-level config sets its own name.
+  graph: ???
+  # the checkpoint to start from (see training.transfer_learning in the configs that use it)
+  warm_start: null
+
+output:
+  # checkpoints, plots and MLflow logs end up here
+  root: ${oc.env:HOME}/anemoi-output/
+
+hardware:
+  accelerator: auto
+  num_nodes: 1
+  num_gpus_per_node: 1
+  num_gpus_per_model: 1

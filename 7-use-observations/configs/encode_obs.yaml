@@ -1,0 +1,55 @@
+# Experiment 2: ENCODE the observations: they become an extra input of the forecast (towards data assimilation).
+#
+#   data (O48 ERA5, t-6h, t)  --encoder.data--\
+#                                              (+)--> hidden --processor--> hidden --decoder.data--> data (t+6h)
+#   obs (observations, t-6h, t) --encoder.obs-/                                  \--decoder.obs---> obs  (t+6h, loss weight 0)
+#
+# The observed variables are prognostic now: input (t-6h, t) and output (t+6h). In this version of anemoi
+# every dataset is also decoded and has a loss, so to use the observations ONLY as an input we give their
+# loss a weight of 0 (training.scalers.datasets.obs.general_variable.weights.default). Set it to 1 to also
+# learn to predict the observations.
+#
+# The obs encoder and decoder start from random weights, so the whole model is fine-tuned.
+#
+#   anemoi-training train --config-path=$PWD/configs --config-name=encode_obs \
+#       system.input.warm_start=<session-5 checkpoint last.ckpt>
+defaults:
+- deterministic_o48
+- obs: radiosondes
+- _self_
+
+# our own imputer (obs_imputer.ObsImputer) is not in the config schema of anemoi-training
+config_validation: False
+
+data:
+  datasets:
+    obs:
+      diagnostic: [] # the observed variables are prognostic: input and output
+
+system:
+  input:
+    graph: ${system.output.root}/graphs/encode_obs.pt
+    warm_start: ???
+
+training:
+  load_weights_only: True
+  transfer_learning: True
+
+  scalers:
+    datasets:
+      obs:
+        general_variable:
+          weights:
+            default: 0 # observations only as input: no loss on them
+
+  max_steps: 1000
+  lr:
+    rate: 1.0e-4 # lower than in session 5: the pretrained part of the model is trained too
+    warmup: 50
+    iterations: ${training.max_steps}
+    min: 3.0e-7
+
+diagnostics:
+  log:
+    mlflow:
+      run_name: encode-obs
