@@ -1,24 +1,29 @@
-# Graph of setup 1 (configs/finetune_obs_decoder.yaml): the graph of the pretrained model plus the obs nodes
-# and the edges of the new obs decoder.
+# Graph of setup 1 (configs/finetune_obs_decoder.yaml): two graphs, one per dataset.
 #
-#   data (O48) --encoder--> hidden --processor--> hidden --decoder.0---> data (O48)
-#                                                        \--decoder.obs--> obs  (O96, 40,320 nodes)
+#   data (O48, 10,944 nodes) --encoder.data--\                                /--decoder.data--> data
+#                                            (+)--> hidden --processor--> hidden
+#   obs  (O96, 40,320 nodes) --encoder.obs---/                                \--decoder.obs---> obs
 #
-# data, hidden and their edges are the same as in graph/pretrain_o48.yaml, so the pretrained weights fit.
+# In anemoi-training 0.9 the graph config is applied to EACH dataset: anemoi builds one graph per dataset, with the
+# grid points of that dataset as the `data` nodes, and saves it as <system.input.graph>_<dataset name>.pt.
+# All datasets share the hidden nodes and the processor edges; each has its own encoder and decoder edges.
+#
+# The graph of `data` and the hidden nodes are the same as in graph/pretrain_o48.yaml, so the pretrained weights
+# fit. The graph of `obs` is new: the edges of the obs encoder and decoder.
 overwrite: True
 
+# names of the data nodes and of the hidden nodes in the graph
+data: "data"
+hidden: "hidden"
+
 nodes:
+  # the grid points of the dataset the graph is built for
   data:
     node_builder:
       _target_: anemoi.graphs.nodes.AnemoiDatasetNodes
-      dataset: ${dataloader.training.datasets.data.dataset_config}
+      dataset: "PLACEHOLDER_DATASET_WILL_BE_OVERRIDDEN"  # always set from dataloader.training.datasets.<name>.dataset
     attributes: ${graph.attributes.nodes}
-  # NEW: the grid points of the second dataset (ERA5 O96)
-  obs:
-    node_builder:
-      _target_: anemoi.graphs.nodes.AnemoiDatasetNodes
-      dataset: ${dataloader.training.datasets.obs.dataset_config}
-    attributes: ${graph.attributes.nodes}
+  # a refined icosahedron of resolution 4: 2,562 nodes. The same for all datasets: they share the processor.
   hidden:
     node_builder:
       _target_: anemoi.graphs.nodes.TriNodes
@@ -26,8 +31,8 @@ nodes:
 
 edges:
 # encoder: data -> hidden
-- source_name: data
-  target_name: hidden
+- source_name: ${graph.data}
+  target_name: ${graph.hidden}
   edge_builders:
   - _target_: anemoi.graphs.edges.CutOffEdges
     cutoff_factor: 0.6
@@ -35,8 +40,8 @@ edges:
     target_mask_attr_name: null
   attributes: ${graph.attributes.edges}
 # processor: hidden -> hidden
-- source_name: hidden
-  target_name: hidden
+- source_name: ${graph.hidden}
+  target_name: ${graph.hidden}
   edge_builders:
   - _target_: anemoi.graphs.edges.MultiScaleEdges
     x_hops: 1
@@ -44,18 +49,9 @@ edges:
     source_mask_attr_name: null
     target_mask_attr_name: null
   attributes: ${graph.attributes.edges}
-# decoder: hidden -> data
-- source_name: hidden
-  target_name: data
-  edge_builders:
-  - _target_: anemoi.graphs.edges.KNNEdges
-    num_nearest_neighbours: 3
-    source_mask_attr_name: null
-    target_mask_attr_name: null
-  attributes: ${graph.attributes.edges}
-# NEW, obs decoder: hidden -> obs. Each obs node receives from its 3 nearest hidden nodes.
-- source_name: hidden
-  target_name: obs
+# decoder: hidden -> data. Each data node receives from its 3 nearest hidden nodes.
+- source_name: ${graph.hidden}
+  target_name: ${graph.data}
   edge_builders:
   - _target_: anemoi.graphs.edges.KNNEdges
     num_nearest_neighbours: 3

@@ -10,8 +10,11 @@ input:
   # the second dataset, standing in for gridded observations: ERA5 on the O96 grid (the toy dataset of
   # session 6, a few days at the end of 2020 and the start of 2021)
   obs_dataset: /datasets/aifs-ea-an-oper-0001-mars-o96-6h-v8-profiling-toy.zarr
-  # Built on first use and saved here. Each top-level config sets its own file name.
+  # Built on first use and saved here, one file per dataset: <name>_data.pt, <name>_obs.pt.
+  # Each top-level config sets its own name.
   graph: ???
+  # the checkpoint to start from (see training.transfer_learning in the configs that use it)
+  warm_start: null
 
 output:
   # checkpoints, plots and MLflow logs end up here
