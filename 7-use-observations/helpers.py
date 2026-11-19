@@ -1,4 +1,4 @@
-"""Helpers of the observations hands-on (anemoi-training 0.9 / anemoi-models 0.12, as in session 5)."""
+"""Helpers of the observations hands-on (anemoi-core `main`)."""
 
 import codecs
 import os
@@ -62,7 +62,7 @@ def run_training(config_name, overrides=(), seed=42):
     command = [str(executable), "train", f"--config-path={CONFIG_DIR}", f"--config-name={config_name}", *overrides]
     print(" ".join(command[1:]), flush=True)
     env = {**os.environ, "ANEMOI_BASE_SEED": str(seed), "PYTHONWARNINGS": "ignore"}
-    # the session folder holds obs_imputer.py, referenced in the configs as obs_imputer.ObsImputer
+    # the session folder on the path, for custom classes referenced in the configs (e.g. processors)
     env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(SESSION_DIR), env.get("PYTHONPATH")]))
     # Read raw bytes so that the progress bar's carriage returns update it in place instead of adding lines
     decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")

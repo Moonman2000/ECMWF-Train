@@ -1,0 +1,65 @@
+# Graph of the pretrained model (configs/pretrain_o48.yaml): ERA5 O48 only.
+#
+#   data (O48, 10,944 nodes) --encoder--> hidden (2,562 nodes) --processor--> hidden --decoder--> data
+#
+# Must stay the same as the graph the pretrained checkpoint was trained with.
+overwrite: True
+
+nodes:
+  # the grid points of the ERA5 O48 dataset
+  data:
+    node_builder:
+      _target_: anemoi.graphs.nodes.AnemoiDatasetNodes
+      dataset: ${dataloader.training.datasets.data.dataset_config}
+    attributes: ${graph.attributes.nodes}
+  # a refined icosahedron of resolution 4: 2,562 nodes
+  hidden:
+    node_builder:
+      _target_: anemoi.graphs.nodes.TriNodes
+      resolution: 4
+
+edges:
+# encoder: data -> hidden
+- source_name: data
+  target_name: hidden
+  edge_builders:
+  - _target_: anemoi.graphs.edges.CutOffEdges
+    cutoff_factor: 0.6
+    source_mask_attr_name: null
+    target_mask_attr_name: null
+  attributes: ${graph.attributes.edges}
+# processor: hidden -> hidden
+- source_name: hidden
+  target_name: hidden
+  edge_builders:
+  - _target_: anemoi.graphs.edges.MultiScaleEdges
+    x_hops: 1
+    scale_resolutions: ${graph.nodes.hidden.node_builder.resolution}
+    source_mask_attr_name: null
+    target_mask_attr_name: null
+  attributes: ${graph.attributes.edges}
+# decoder: hidden -> data
+- source_name: hidden
+  target_name: data
+  edge_builders:
+  - _target_: anemoi.graphs.edges.KNNEdges
+    num_nearest_neighbours: 3
+    source_mask_attr_name: null
+    target_mask_attr_name: null
+  attributes: ${graph.attributes.edges}
+
+attributes:
+  nodes:
+    area_weight:
+      _target_: anemoi.graphs.nodes.attributes.SphericalAreaWeights
+      norm: unit-max
+      fill_value: 0
+  edges:
+    edge_length:
+      _target_: anemoi.graphs.edges.attributes.EdgeLength
+      norm: unit-std
+    edge_dirs:
+      _target_: anemoi.graphs.edges.attributes.EdgeDirection
+      norm: unit-std
+
+post_processors: []

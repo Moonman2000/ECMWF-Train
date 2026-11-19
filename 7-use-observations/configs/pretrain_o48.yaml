@@ -1,17 +1,19 @@
-# The deterministic model of session 5 (../5-Anemoi-train/configs/deterministic_o48.yaml), the model we
-# fine-tune with observations. The model settings must stay the same as in session 5, so that the weights
-# of a session-5 checkpoint fit.
+# The pretrained model: the deterministic model of session 5 (../5-Anemoi-train/configs/deterministic_o48.yaml),
+# written for anemoi-core `main`. Only ERA5 (dataset `data`, O48). The setups of this session start from a
+# checkpoint of this config, so its model settings must not change, or the pretrained weights will not fit.
 #
-# Files that are not in configs/ (e.g. model/graphtransformer.yaml) come from the installed anemoi-training
-# package: they are the same as in ../5-Anemoi-train/configs.
+#   anemoi-training train --config-path=$PWD/configs --config-name=pretrain_o48
+#
+# Files that are not in configs/ (e.g. model/graphtransformer.yaml) come from the installed anemoi-training.
 defaults:
 - data: toy
 - dataloader: toy_o48
 - diagnostics: evaluation
 - system: course
-- graph: multi_scale
+- graph: pretrain_o48       # configs/graph/pretrain_o48.yaml
 - model: graphtransformer
-- training: default
+- task: forecaster
+- training: single
 - _self_
 
 config_validation: True
@@ -21,14 +23,7 @@ data:
 
 system:
   input:
-    graph: ${system.output.root}/graphs/deterministic_o48.pt
-
-# The O48 grid has 10,944 points. A refined icosahedron of resolution 4 gives 2,562 hidden nodes.
-graph:
-  nodes:
-    hidden:
-      node_builder:
-        resolution: 4
+    graph: ${system.output.root}/graphs/pretrain_o48.pt
 
 # Smaller than the operational AIFS (1024 channels, 16 layers)
 model:
@@ -36,22 +31,25 @@ model:
   processor:
     num_layers: 8
 
-training:
+# input: the states at t-6h and t; output: the state at t+6h
+task:
   multistep_input: 2
+  multistep_output: 1
+  timestep: 6H
   rollout:
     start: 1
     epoch_increment: 0
-    max: 1
+    maximum: 1
 
-  max_steps: 1000
+training:
+  max_steps: 2000
   max_epochs: null
   num_sanity_val_steps: 1
 
-  lr:
-    rate: 5.0e-4
-    warmup: 100
-    iterations: ${training.max_steps}
-    min: 3.0e-7
+  optimization:
+    lr: 5.0e-4 # one GPU: this is also the effective learning rate
+    lr_scheduler:
+      warmup_t: 100
 
   scalers:
     datasets:
@@ -92,4 +90,4 @@ diagnostics:
       offline: True # log to files in system.output.root/logs/mlflow, no server needed
       tracking_uri: ${system.output.logs.mlflow}
       experiment_name: training-course-obs
-      run_name: deterministic-o48
+      run_name: pretrain-o48

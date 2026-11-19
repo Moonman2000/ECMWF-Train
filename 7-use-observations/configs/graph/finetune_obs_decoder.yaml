@@ -1,0 +1,80 @@
+# Graph of setup 1 (configs/finetune_obs_decoder.yaml): the graph of the pretrained model plus the obs nodes
+# and the edges of the new obs decoder.
+#
+#   data (O48) --encoder--> hidden --processor--> hidden --decoder.0---> data (O48)
+#                                                        \--decoder.obs--> obs  (O96, 40,320 nodes)
+#
+# data, hidden and their edges are the same as in graph/pretrain_o48.yaml, so the pretrained weights fit.
+overwrite: True
+
+nodes:
+  data:
+    node_builder:
+      _target_: anemoi.graphs.nodes.AnemoiDatasetNodes
+      dataset: ${dataloader.training.datasets.data.dataset_config}
+    attributes: ${graph.attributes.nodes}
+  # NEW: the grid points of the second dataset (ERA5 O96)
+  obs:
+    node_builder:
+      _target_: anemoi.graphs.nodes.AnemoiDatasetNodes
+      dataset: ${dataloader.training.datasets.obs.dataset_config}
+    attributes: ${graph.attributes.nodes}
+  hidden:
+    node_builder:
+      _target_: anemoi.graphs.nodes.TriNodes
+      resolution: 4
+
+edges:
+# encoder: data -> hidden
+- source_name: data
+  target_name: hidden
+  edge_builders:
+  - _target_: anemoi.graphs.edges.CutOffEdges
+    cutoff_factor: 0.6
+    source_mask_attr_name: null
+    target_mask_attr_name: null
+  attributes: ${graph.attributes.edges}
+# processor: hidden -> hidden
+- source_name: hidden
+  target_name: hidden
+  edge_builders:
+  - _target_: anemoi.graphs.edges.MultiScaleEdges
+    x_hops: 1
+    scale_resolutions: ${graph.nodes.hidden.node_builder.resolution}
+    source_mask_attr_name: null
+    target_mask_attr_name: null
+  attributes: ${graph.attributes.edges}
+# decoder: hidden -> data
+- source_name: hidden
+  target_name: data
+  edge_builders:
+  - _target_: anemoi.graphs.edges.KNNEdges
+    num_nearest_neighbours: 3
+    source_mask_attr_name: null
+    target_mask_attr_name: null
+  attributes: ${graph.attributes.edges}
+# NEW, obs decoder: hidden -> obs. Each obs node receives from its 3 nearest hidden nodes.
+- source_name: hidden
+  target_name: obs
+  edge_builders:
+  - _target_: anemoi.graphs.edges.KNNEdges
+    num_nearest_neighbours: 3
+    source_mask_attr_name: null
+    target_mask_attr_name: null
+  attributes: ${graph.attributes.edges}
+
+attributes:
+  nodes:
+    area_weight:
+      _target_: anemoi.graphs.nodes.attributes.SphericalAreaWeights
+      norm: unit-max
+      fill_value: 0
+  edges:
+    edge_length:
+      _target_: anemoi.graphs.edges.attributes.EdgeLength
+      norm: unit-std
+    edge_dirs:
+      _target_: anemoi.graphs.edges.attributes.EdgeDirection
+      norm: unit-std
+
+post_processors: []
