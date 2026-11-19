@@ -1,49 +1,112 @@
-# Experiment 1: fine-tune the model of session 5 with a NEW DECODER that predicts the observations.
+# Setup 1: fine-tune the pretrained model with a NEW DECODER that predicts the observations.
 #
-#   data (O48 ERA5, t-6h, t) --encoder.data--\
-#                                             (+)--> hidden --processor--> hidden --decoder.data--> data (t+6h)
-#   obs forcings (t-6h, t)   --encoder.obs---/                                   \--decoder.obs---> obs  (observations, t+6h)
+#   data (O48 ERA5, t-6h, t) --encoder.0--> hidden --processor--> hidden --decoder.0---> data (t+6h)
+#                                                                        \--decoder.obs--> obs  (t+6h)
 #
-# The observed variables are only a target (diagnostic). In this version of anemoi every dataset is also
-# encoded, so the obs encoder reads what `obs` has as input: its forcings (position, time of day, insolation,
-# land-sea mask, orography). Its latent state is added to the one of ERA5 on the hidden mesh.
-#
-# Everything of ERA5 and the processor are loaded from the session-5 checkpoint and frozen; the obs encoder and
-# decoder start from random weights and learn.
+# The observed variables are only a target (diagnostic) and `obs` has no encoder: it is an output-only dataset.
+# Everything pretrained is loaded from the checkpoint and frozen; only the obs decoder (random weights at the
+# start) is trained. It is trained on the dates that both datasets have (configs/obs/era5_o96.yaml): the
+# pretrained model needs ERA5 O48 as input, the obs decoder needs `obs` as its target.
 #
 #   anemoi-training train --config-path=$PWD/configs --config-name=finetune_obs_decoder \
-#       system.input.warm_start=<session-5 checkpoint last.ckpt>
+#       training.checkpoint.source.path=<pretrained last.ckpt> <obs dates, see configs/obs/era5_o96.yaml>
 defaults:
-- deterministic_o48 # everything of the model of session 5 ...
-- obs: radiosondes  # ... plus the observation dataset `obs`
+- pretrain_o48       # everything of the pretrained model ...
+- obs: era5_o96      # ... plus the dataset `obs`
+- override graph: finetune_obs_decoder  # configs/graph/finetune_obs_decoder.yaml: data, obs and hidden nodes and their edges
+# how to start from the checkpoint (training.checkpoint)
+- override training/checkpoint/source: local                # a checkpoint file
+- override training/checkpoint/loading: transfer_learning   # every weight that exists with the same shape
+- override training/checkpoint/modifiers: freezing          # then freeze what was pretrained
 - _self_
-
-# The config schema of anemoi-training only accepts its own processor classes, and we use our own
-# imputer (obs_imputer.ObsImputer). So we switch the schema validation off for this config.
-config_validation: False
 
 system:
   input:
     graph: ${system.output.root}/graphs/finetune_obs_decoder.pt
-    warm_start: ??? # the checkpoint of session 5, e.g. <output root>/checkpoint/<run id>/last.ckpt
+
+model:
+  decoders:
+    obs: # the name of the decoder group: its weights are model.model.decoder.obs.*
+      target_datasets: [obs]
+      # obs has no encoder, so no `encoded_data`: the decoder knows the position and the forcings of each point
+      target_node_features: [coordinates, forcings]
+      mapper:
+        _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
+        num_channels: ${model.num_channels}
+        trainable_size: 0 # no trainable parameters per edge: the decoder can decode at any location
+        sub_graph_edge_attributes: ${model.attributes.edges}
+        num_chunks: 4
+        mlp_hidden_ratio: 4
+        mlp_implementation: mlp
+        num_heads: 16
+        initialise_data_extractor_zero: False
+        qk_norm: False
+        cpu_offload: ${model.cpu_offload}
+        gradient_checkpointing: True
+        layer_kernels: ${model.layer_kernels}
+        shard_strategy: "edges"
+        graph_attention_backend: "triton"
+        edge_pre_mlp: False
 
 training:
-  # Start from the weights of system.input.warm_start. transfer_learning: load the weights that exist in
-  # the checkpoint with the same shape (all of ERA5 and the processor); the obs encoder and decoder are new.
-  load_weights_only: True
-  transfer_learning: True
-
-  # Freeze by module name: "data" matches every module of the ERA5 dataset (encoder.data, decoder.data,
-  # their graph edges and trainable node parameters), "processor" the processor and
-  # "processor_graph_provider" its trainable edge parameters. Set to [] to fine-tune the whole model.
-  submodules_to_freeze: [data, processor, processor_graph_provider]
+  checkpoint:
+    source:
+      path: ??? # the training checkpoint (last.ckpt) of pretrain_o48
+    modifiers:
+    - _target_: anemoi.training.checkpoint.modifiers.freezing.FreezingModifierStage
+      # Module paths from the LightningModule. Everything that was pretrained; not the obs decoder.
+      submodules_to_freeze:
+      - model.model.encoder.0
+      - model.model.processor
+      - model.model.decoder.0
+      - model.model.node_attributes            # trainable parameters of the data and hidden nodes
+      - model.model.encoder_graph_provider     # trainable parameters of the encoder edges
+      - model.model.processor_graph_provider   # ... of the processor edges
+      - model.model.decoder_graph_provider.data
+      strict: true
 
   max_steps: 1000
-  lr:
-    rate: 1.0e-3
-    warmup: 50
-    iterations: ${training.max_steps}
-    min: 3.0e-7
+  optimization:
+    lr: 1.0e-3
+    lr_scheduler:
+      warmup_t: 50
+
+  # loss and metrics of `obs`
+  training_loss:
+    datasets:
+      obs:
+        _target_: anemoi.training.losses.MSELoss
+        scalers: [general_variable, node_weights, time_steps]
+        ignore_nans: False
+  scalers:
+    datasets:
+      obs:
+        general_variable:
+          _target_: anemoi.training.losses.scalers.GeneralVariableLossScaler
+          weights:
+            default: 1
+        node_weights:
+          _target_: anemoi.training.losses.scalers.GraphNodeAttributeScaler
+          nodes_attribute_name: area_weight
+          norm: unit-sum
+        time_steps:
+          _target_: anemoi.training.losses.scalers.UniformTimeStepScaler
+  validation_metrics:
+    datasets:
+      obs:
+        mse:
+          _target_: anemoi.training.losses.MSELoss
+          scalers: [node_weights, time_steps]
+          ignore_nans: True
+  variable_groups:
+    datasets:
+      obs:
+        default: sfc
+        pl:
+          param: [t, z, u, v, q]
+  metrics:
+    datasets:
+      obs: [t_850, z_500, u_500]
 
 diagnostics:
   log:

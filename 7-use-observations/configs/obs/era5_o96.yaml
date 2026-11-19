@@ -1,0 +1,90 @@
+# @package _global_
+#
+# The second dataset, called `obs`: ERA5 on the O96 grid, standing in for gridded observations.
+#
+# To keep things simple we use complete fields (no gaps): every O96 grid point is "observed" at every time.
+# Real gridded observations have NaN where nothing was observed; they then need an imputer to fill the gaps
+# and a loss mask (see the notebook).
+#
+# To use another gridded dataset, copy this file, change system.input.obs_dataset and the variable lists, and
+# select it with `obs=<new file name>`. Requirements:
+#   - the same frequency as the ERA5 dataset (6h)
+#   - the same dates in each period: samples are matched by POSITION, not by date
+#   - statistics of every variable in the dataset
+#
+# Only the dataset itself is here (variables, files, dates). Its graph nodes and edges are in
+# configs/graph/<experiment>.yaml; how the model uses it (encoder or decoder, loss) in the experiment configs
+# finetune_obs_decoder.yaml and encode_obs.yaml.
+
+data:
+  datasets:
+    obs:
+      # By default the observed variables are *diagnostic*: the model predicts them, but they are not
+      # an input. encode_obs.yaml makes them forcings (input only).
+      diagnostic: [t_850, t_500, z_500, u_500, v_500, q_700]
+      forcing: [cos_latitude, cos_longitude, sin_latitude, sin_longitude, cos_julian_day, cos_local_time,
+                sin_julian_day, sin_local_time, insolation, lsm, z]
+      processors:
+        normalizer:
+          _target_: anemoi.models.preprocessing.normalizer.InputNormalizer
+          config:
+            default: "mean-std" # with the statistics of the O96 dataset
+            std:
+            min-max:
+            max: [z]
+            none: [cos_latitude, cos_longitude, sin_latitude, sin_longitude, cos_julian_day, cos_local_time,
+                   sin_julian_day, sin_local_time, insolation, lsm]
+
+# The O96 toy dataset holds only a few days (end of 2020 for training, start of 2021 for validation), so the
+# periods of BOTH datasets are set to its exact first and last dates. The notebook reads them from the
+# dataset and passes them as overrides, e.g.
+#   dataloader.training.datasets.obs.start=2020-12-20T00:00:00 dataloader.training.datasets.obs.end=...
+# `data` (ERA5 O48) follows the dates of `obs`.
+dataloader:
+  batch_size:
+    validation: 1 # the validation period is short
+  limit_batches:
+    validation: null
+    test: null
+  training:
+    datasets:
+      data:
+        start: ${dataloader.training.datasets.obs.start}
+        end: ${dataloader.training.datasets.obs.end}
+      obs:
+        dataset_config:
+          dataset: ${system.input.obs_dataset}
+          frequency: ${data.frequency}
+          # only the variables we use: the observed ones and the forcings
+          select: [cos_latitude, cos_longitude, sin_latitude, sin_longitude, cos_julian_day, cos_local_time,
+                   sin_julian_day, sin_local_time, insolation, lsm, z, t_850, t_500, z_500, u_500, v_500, q_700]
+        start: ???
+        end: ???
+  validation:
+    datasets:
+      data:
+        start: ${dataloader.validation.datasets.obs.start}
+        end: ${dataloader.validation.datasets.obs.end}
+      obs:
+        dataset_config: ${dataloader.training.datasets.obs.dataset_config}
+        start: ???
+        end: ???
+  test:
+    datasets:
+      data:
+        start: ${dataloader.validation.datasets.obs.start}
+        end: ${dataloader.validation.datasets.obs.end}
+      obs:
+        dataset_config: ${dataloader.training.datasets.obs.dataset_config}
+        start: ${dataloader.validation.datasets.obs.start}
+        end: ${dataloader.validation.datasets.obs.end}
+
+model:
+  # Every dataset needs an output mask (no masking here)
+  output_mask:
+    datasets:
+      obs:
+        _target_: anemoi.training.utils.masks.NoOutputMask
+  # No trainable parameters per obs node: the encoder/decoder of `obs` must work at any location
+  node_trainable_parameters:
+    obs: 0

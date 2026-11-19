@@ -1,53 +1,76 @@
-# Experiment 2: ENCODE the observations: they become an extra input of the forecast (towards data assimilation).
+# Setup 2: ENCODE the observations: they become an extra input of the forecast (towards data assimilation).
 #
-#   data (O48 ERA5, t-6h, t)  --encoder.data--\
-#                                              (+)--> hidden --processor--> hidden --decoder.data--> data (t+6h)
-#   obs (observations, t-6h, t) --encoder.obs-/                                  \--decoder.obs---> obs  (t+6h, loss weight 0)
+#   data (O48 ERA5, t-6h, t) --encoder.0---\
+#                                           (+)--> hidden --processor--> hidden --decoder.0--> data (t+6h)
+#   obs (t-6h, t)            --encoder.obs-/
 #
-# The observed variables are prognostic now: input (t-6h, t) and output (t+6h). In this version of anemoi
-# every dataset is also decoded and has a loss, so to use the observations ONLY as an input we give their
-# loss a weight of 0 (training.scalers.datasets.obs.general_variable.weights.default). Set it to 1 to also
-# learn to predict the observations.
+# All variables of `obs` are forcings (input only) and `obs` has no decoder and no loss: it is an input-only
+# dataset. The latent state of the obs encoder is added to that of the ERA5 encoder on the hidden mesh
+# (model.latent_aggregator: SumAggregator).
 #
-# The obs encoder and decoder start from random weights, so the whole model is fine-tuned.
+# The obs encoder starts from random weights. Nothing is frozen: the whole model is fine-tuned, with a smaller
+# learning rate.
 #
 #   anemoi-training train --config-path=$PWD/configs --config-name=encode_obs \
-#       system.input.warm_start=<session-5 checkpoint last.ckpt>
+#       training.checkpoint.source.path=<pretrained last.ckpt> <obs dates, see configs/obs/era5_o96.yaml>
 defaults:
-- deterministic_o48
-- obs: radiosondes
+- pretrain_o48
+- obs: era5_o96
+- override graph: encode_obs  # configs/graph/encode_obs.yaml: data, obs and hidden nodes and their edges
+- override training/checkpoint/source: local
+- override training/checkpoint/loading: transfer_learning
 - _self_
-
-# our own imputer (obs_imputer.ObsImputer) is not in the config schema of anemoi-training
-config_validation: False
 
 data:
   datasets:
     obs:
-      diagnostic: [] # the observed variables are prognostic: input and output
+      diagnostic: []
+      # the observed variables are forcings now: input only
+      forcing: [cos_latitude, cos_longitude, sin_latitude, sin_longitude, cos_julian_day, cos_local_time,
+                sin_julian_day, sin_local_time, insolation, lsm, z, t_850, t_500, z_500, u_500, v_500, q_700]
 
 system:
   input:
     graph: ${system.output.root}/graphs/encode_obs.pt
-    warm_start: ???
 
-training:
-  load_weights_only: True
-  transfer_learning: True
-
-  scalers:
+model:
+  encoders:
+    obs: # the name of the encoder group: its weights are model.model.encoder.obs.*
+      source_datasets: [obs]
+      dataset_fusing_strategy: "not_supported"
+      mapper:
+        _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
+        num_channels: ${model.num_channels}
+        trainable_size: 0 # no trainable parameters per edge: the encoder can read observations anywhere
+        sub_graph_edge_attributes: ${model.attributes.edges}
+        num_chunks: 4
+        mlp_hidden_ratio: 4
+        mlp_implementation: mlp
+        num_heads: 16
+        qk_norm: False
+        cpu_offload: ${model.cpu_offload}
+        gradient_checkpointing: True
+        layer_kernels: ${model.layer_kernels}
+        shard_strategy: "edges"
+        graph_attention_backend: "triton"
+        edge_pre_mlp: False
+  # every encoded dataset needs a residual entry (with no prognostic variables, it adds nothing)
+  residual:
     datasets:
       obs:
-        general_variable:
-          weights:
-            default: 0 # observations only as input: no loss on them
+        _target_: anemoi.models.layers.residual.SkipConnection
+        step: -1
+
+training:
+  checkpoint:
+    source:
+      path: ??? # the training checkpoint (last.ckpt) of pretrain_o48
 
   max_steps: 1000
-  lr:
-    rate: 1.0e-4 # lower than in session 5: the pretrained part of the model is trained too
-    warmup: 50
-    iterations: ${training.max_steps}
-    min: 3.0e-7
+  optimization:
+    lr: 1.0e-4 # lower than for pretraining: the pretrained part of the model is trained too
+    lr_scheduler:
+      warmup_t: 50
 
 diagnostics:
   log:

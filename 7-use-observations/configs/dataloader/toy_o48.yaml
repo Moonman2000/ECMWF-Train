@@ -1,9 +1,7 @@
-# The dataloader of session 5 (configs/dataloader/toy_o48.yaml), with one change: all periods start on 2010-01-02.
-#
-# With several datasets, the samples of the datasets are matched by their POSITION in the selected period,
-# not by their date. Every dataset must therefore cover exactly the same dates: same frequency, and the same
-# first date. The toy dataset starts at 2010-01-01 00 UTC, but the observation dataset we use for testing
-# starts at 06 UTC, so we start all datasets on 2010-01-02.
+# The dataloader of session 5 (../5-Anemoi-train/configs/dataloader/toy_o48.yaml), for anemoi-core `main`:
+# the arguments of open_dataset now go under `dataset_config`.
+# Train on 2010-2020, validate on 2021, test on 2022. The setups with observations replace these periods
+# (see configs/obs/era5_o96.yaml).
 defaults:
   - native_grid  # the default of anemoi-training, the rest of this file overrides it
   - _self_
@@ -17,7 +15,7 @@ batch_size:
   validation: 2
   test: 2
 
-# Use only N batches per epoch (null = all of them): validate, plot and checkpoint every 100 steps.
+# Use only N batches per epoch (null = all of them): validate and checkpoint every 100 steps.
 limit_batches:
   training: 100
   validation: 8
@@ -26,7 +24,7 @@ limit_batches:
 training:
   datasets:
     data:
-      start: 2010-01-02
+      start: null
       end: 2020
 
 validation:
@@ -39,4 +37,4 @@ test:
   datasets:
     data:
       start: 2022
-      end: 2022
+      end: null
